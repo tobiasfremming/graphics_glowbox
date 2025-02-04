@@ -111,6 +111,11 @@ namespace Gloom
         }
 
 
+        GLuint getProgramID() { // Add this method
+        return mProgram;
+        }
+
+
         /* Used for debugging shader programs (expensive to run) */
         bool isValid()
         {

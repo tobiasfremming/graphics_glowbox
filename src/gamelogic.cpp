@@ -37,6 +37,10 @@ SceneNode* rootNode;
 SceneNode* boxNode;
 SceneNode* ballNode;
 SceneNode* padNode;
+SceneNode* light1Node;
+SceneNode* light2Node;
+SceneNode* movingLightNode;
+
 
 double ballRadius = 3.0f;
 
@@ -91,16 +95,20 @@ void mouseCallback(GLFWwindow* window, double x, double y) {
 }
 
 //// A few lines to help you if you've never used c++ structs
-// struct LightSource {
-//     bool a_placeholder_value;
-// };
-// LightSource lightSources[/*Put number of light sources you want here*/];
+struct LightSource {
+    glm::vec3 position;
+    glm::vec3 color;
+    float intensity;
+    // int id; // vertex array object id from its node
+};
+LightSource lightSources[3];
 
 void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     buffer = new sf::SoundBuffer();
     if (!buffer->loadFromFile("../res/Hall of the Mountain King.ogg")) {
         return;
     }
+    
 
     options = gameOptions;
 
@@ -127,6 +135,23 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     padNode  = createSceneNode();
     ballNode = createSceneNode();
 
+    light1Node = createSceneNode();
+    light2Node = createSceneNode();
+    movingLightNode = createSceneNode();
+
+    light1Node->nodeType = POINT_LIGHT;
+    light2Node->nodeType = POINT_LIGHT;
+    movingLightNode->nodeType = POINT_LIGHT;
+
+    // Set initial positions of the lights
+    light1Node->position = glm::vec3(-20.0f, 10.0f, -5.0f); // Static
+    light2Node->position = glm::vec3(5.0f, 40.0f, 10.0f);   // Static
+    movingLightNode->position = glm::vec3(0.0f, 50.0f, 0.0f); // Moving
+
+    rootNode->children.push_back(light1Node);
+    rootNode->children.push_back(light2Node);
+    rootNode->children.push_back(movingLightNode);
+
     rootNode->children.push_back(boxNode);
     rootNode->children.push_back(padNode);
     rootNode->children.push_back(ballNode);
@@ -148,14 +173,59 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     getTimeDeltaSeconds();
 
     std::cout << fmt::format("Initialized scene with {} SceneNodes.", totalChildren(rootNode)) << std::endl;
-
-    std::cout << "Ready. Click to start!" << std::endl;
+    
 }
 
 void updateFrame(GLFWwindow* window) {
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     double timeDelta = getTimeDeltaSeconds();
+
+    // Move the dynamic light in a circular motion
+    float lightMoveRadius = 40.0f;
+    float lightSpeed = 3.5f;
+    movingLightNode->position.x = sin(glfwGetTime() * lightSpeed) * lightMoveRadius;
+    movingLightNode->position.z = cos(glfwGetTime() * lightSpeed) * lightMoveRadius;
+
+    // Send light positions to the shader
+    glm::vec3 lightPositions[3] = {
+        light1Node->position,
+        light2Node->position,
+        movingLightNode->position
+    };
+    
+
+    glm::vec3 lightColors[3] = {
+        glm::vec3(1.0f, 0.0f, 0.0f),  // R light
+        glm::vec3(0.0f, 1.0f, 0.0f),  // G light
+        glm::vec3(0.0f, 0.0f, 1.0f)   // B moving light
+    };
+
+    // Pass light data to the shader
+    // GLuint shaderProgram = shader->getProgramID();
+    // glUseProgram(shaderProgram);
+    shader->activate();
+    GLuint shaderProgram = shader->get();
+    // std::cout << "Shader program: " << shaderProgram << std::endl;
+    if (!shader->isValid()) {
+    std::cerr << "Shader program failed validation!" << std::endl;
+    }
+    
+
+    for (int i = 0; i < 3; i++) {
+        std::string posUniform   = "lights[" + std::to_string(i) + "].position";
+        std::string colorUniform = "lights[" + std::to_string(i) + "].color";
+
+        glUniform3fv(glGetUniformLocation(shaderProgram, posUniform.c_str()), 1, glm::value_ptr(lightPositions[i]));
+        glUniform3fv(glGetUniformLocation(shaderProgram, colorUniform.c_str()), 1, glm::value_ptr(lightColors[i]));
+    }
+
+    // Update camera position for specular reflections
+    glm::vec3 cameraPos = glm::vec3(0, 2, -20);
+    glUniform3fv(glGetUniformLocation(5, "viewPos"), 1, glm::value_ptr(cameraPos));
+
+    updateNodeTransformations(rootNode, glm::mat4(1.0f));
+
 
     const float ballBottomY = boxNode->position.y - (boxDimensions.y/2) + ballRadius + padDimensions.y;
     const float ballTopY    = boxNode->position.y + (boxDimensions.y/2) - ballRadius;
@@ -335,9 +405,6 @@ void updateFrame(GLFWwindow* window) {
     };
 
     updateNodeTransformations(rootNode, VP);
-
-
-
 
 }
 
