@@ -390,6 +390,13 @@ void updateFrame(GLFWwindow* window) {
                     glm::translate(-cameraPosition);
 
     glm::mat4 VP = projection * cameraTransform;
+    glm::mat4 P = glm::perspective(glm::radians(80.0f), float(windowWidth) / float(windowHeight), 0.1f, 350.f);
+
+    glm::mat4 M = glm::mat4(1.0f); // TODO: Implement model matrix
+
+    // Pass these to the shader separately instead of computing MVP early
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "VP"), 1, GL_FALSE, glm::value_ptr(VP));
+
 
     // Move and rotate various SceneNodes
     boxNode->position = { 0, -10, -80 };
@@ -421,7 +428,9 @@ void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar)
     node->currentTransformationMatrix = transformationThusFar * transformationMatrix;
 
     switch(node->nodeType) {
-        case GEOMETRY: break;
+        case GEOMETRY: 
+            glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
+            break;
         case POINT_LIGHT: break;
         case SPOT_LIGHT: break;
     }
@@ -433,6 +442,7 @@ void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar)
 
 void renderNode(SceneNode* node) {
     glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
+    glUniformMatrix4fv(glGetUniformLocation(shader->get(), "model"), 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
 
     switch(node->nodeType) {
         case GEOMETRY:
