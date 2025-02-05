@@ -144,9 +144,9 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     movingLightNode->nodeType = POINT_LIGHT;
 
     // Set initial positions of the lights
-    light1Node->position = glm::vec3(-20.0f, 10.0f, -5.0f); // Static
-    light2Node->position = glm::vec3(5.0f, 40.0f, 10.0f);   // Static
-    movingLightNode->position = glm::vec3(0.0f, 50.0f, 0.0f); // Moving
+    light1Node->position = glm::vec3(0.0f, 0.0f, 0.0f); // Static
+    light2Node->position = glm::vec3(0.0f, -20.0f, -10.0f);   // Static
+    movingLightNode->position = glm::vec3(0.0f, -20.0f, -10.0f); // Moving
 
     rootNode->children.push_back(light1Node);
     rootNode->children.push_back(light2Node);
@@ -183,22 +183,29 @@ void updateFrame(GLFWwindow* window) {
 
     // Move the dynamic light in a circular motion
     float lightMoveRadius = 40.0f;
-    float lightSpeed = 3.5f;
+    float lightSpeed = 0.5f;
     movingLightNode->position.x = sin(glfwGetTime() * lightSpeed) * lightMoveRadius;
     movingLightNode->position.z = cos(glfwGetTime() * lightSpeed) * lightMoveRadius;
-
+    
+    light1Node->position = ballPosition;
+    
     // Send light positions to the shader
+    // glm::vec3 lightPositions[3] = {
+    //     light1Node->position,
+    //     light2Node->position,
+    //     movingLightNode->position
+    // };
     glm::vec3 lightPositions[3] = {
-        light1Node->position,
-        light2Node->position,
-        movingLightNode->position
+        glm::vec3(light1Node->currentTransformationMatrix * glm::vec4(0, 0, 0, 1)),
+        glm::vec3(light2Node->currentTransformationMatrix * glm::vec4(0, 0, 0, 1)),
+        glm::vec3(movingLightNode->currentTransformationMatrix * glm::vec4(0, 0, 0, 1))
     };
     
 
     glm::vec3 lightColors[3] = {
-        glm::vec3(1.0f, 0.0f, 0.0f),  // R light
-        glm::vec3(0.0f, 1.0f, 0.0f),  // G light
-        glm::vec3(0.0f, 0.0f, 1.0f)   // B moving light
+        glm::vec3(0.0f, 0.0f, 0.0f),  // R light
+        glm::vec3(1.0f, 1.0f, 1.0f),  // G light
+        glm::vec3(1.0f, 1.0f, 1.0f)   // B moving light
     };
 
     // Pass light data to the shader
@@ -270,6 +277,8 @@ void updateFrame(GLFWwindow* window) {
         ballPosition.x = ballMinX + (1 - padPositionX) * (ballMaxX - ballMinX);
         ballPosition.y = ballBottomY;
         ballPosition.z = ballMinZ + (1 - padPositionZ) * ((ballMaxZ+cameraWallOffset) - ballMinZ);
+        
+
     } else {
         totalElapsedTime += timeDelta;
         if(hasLost) {
@@ -329,7 +338,7 @@ void updateFrame(GLFWwindow* window) {
             }
 
             // Make ball move
-            const float ballSpeed = 60.0f;
+            const float ballSpeed = 20.0f;
             ballPosition.x += timeDelta * ballSpeed * ballDirection.x;
             ballPosition.y = ballYCoord;
             ballPosition.z += timeDelta * ballSpeed * ballDirection.z;
@@ -392,9 +401,7 @@ void updateFrame(GLFWwindow* window) {
     glm::mat4 VP = projection * cameraTransform;
     glm::mat4 P = glm::perspective(glm::radians(80.0f), float(windowWidth) / float(windowHeight), 0.1f, 350.f);
 
-    glm::mat4 M = glm::mat4(1.0f); // TODO: Implement model matrix
-
-    // Pass these to the shader separately instead of computing MVP early
+   
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "VP"), 1, GL_FALSE, glm::value_ptr(VP));
 
 
@@ -431,7 +438,8 @@ void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar)
         case GEOMETRY: 
             glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
             break;
-        case POINT_LIGHT: break;
+        case POINT_LIGHT: 
+            break;
         case SPOT_LIGHT: break;
     }
 
@@ -441,8 +449,16 @@ void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar)
 }
 
 void renderNode(SceneNode* node) {
+    GLuint shaderProgram = shader->get();
+    glm::mat4 modelMatrix = node->currentTransformationMatrix;
+
     glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
-    glUniformMatrix4fv(glGetUniformLocation(shader->get(), "model"), 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
+    glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(modelMatrix)));
+    glUniformMatrix3fv(glGetUniformLocation(shaderProgram, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+
+    glUniform3fv(glGetUniformLocation(shaderProgram, "ball_position"), 1, glm::value_ptr(ballNode->position));
+    glUniform1f(glGetUniformLocation(shaderProgram, "ball_radius"), ballRadius);
 
     switch(node->nodeType) {
         case GEOMETRY:
