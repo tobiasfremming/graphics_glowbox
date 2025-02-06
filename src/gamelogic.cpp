@@ -145,7 +145,7 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
 
     // Set initial positions of the lights
     light1Node->position = glm::vec3(0.0f, 0.0f, 0.0f); // Static
-    light2Node->position = glm::vec3(0.0f, -20.0f, -10.0f);   // Static
+    light2Node->position = glm::vec3(-15.0f, -50.0f, -90.0f);   // Static
     movingLightNode->position = glm::vec3(0.0f, -20.0f, -10.0f); // Moving
 
     rootNode->children.push_back(light1Node);
@@ -179,6 +179,9 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
 void updateFrame(GLFWwindow* window) {
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
+    shader->activate();
+    GLuint shaderProgram = shader->get();
+
     double timeDelta = getTimeDeltaSeconds();
 
     // Move the dynamic light in a circular motion
@@ -187,53 +190,7 @@ void updateFrame(GLFWwindow* window) {
     movingLightNode->position.x = sin(glfwGetTime() * lightSpeed) * lightMoveRadius;
     movingLightNode->position.z = cos(glfwGetTime() * lightSpeed) * lightMoveRadius;
     
-    light1Node->position = ballPosition;
     
-    // Send light positions to the shader
-    // glm::vec3 lightPositions[3] = {
-    //     light1Node->position,
-    //     light2Node->position,
-    //     movingLightNode->position
-    // };
-    glm::vec3 lightPositions[3] = {
-        glm::vec3(light1Node->currentTransformationMatrix * glm::vec4(0, 0, 0, 1)),
-        glm::vec3(light2Node->currentTransformationMatrix * glm::vec4(0, 0, 0, 1)),
-        glm::vec3(movingLightNode->currentTransformationMatrix * glm::vec4(0, 0, 0, 1))
-    };
-    
-
-    glm::vec3 lightColors[3] = {
-        glm::vec3(0.0f, 0.0f, 0.0f),  // R light
-        glm::vec3(1.0f, 1.0f, 1.0f),  // G light
-        glm::vec3(1.0f, 1.0f, 1.0f)   // B moving light
-    };
-
-    // Pass light data to the shader
-    // GLuint shaderProgram = shader->getProgramID();
-    // glUseProgram(shaderProgram);
-    shader->activate();
-    GLuint shaderProgram = shader->get();
-    // std::cout << "Shader program: " << shaderProgram << std::endl;
-    if (!shader->isValid()) {
-    std::cerr << "Shader program failed validation!" << std::endl;
-    }
-    
-
-    for (int i = 0; i < 3; i++) {
-        std::string posUniform   = "lights[" + std::to_string(i) + "].position";
-        std::string colorUniform = "lights[" + std::to_string(i) + "].color";
-
-        glUniform3fv(glGetUniformLocation(shaderProgram, posUniform.c_str()), 1, glm::value_ptr(lightPositions[i]));
-        glUniform3fv(glGetUniformLocation(shaderProgram, colorUniform.c_str()), 1, glm::value_ptr(lightColors[i]));
-    }
-
-    // Update camera position for specular reflections
-    glm::vec3 cameraPos = glm::vec3(0, 2, -20);
-    glUniform3fv(glGetUniformLocation(5, "viewPos"), 1, glm::value_ptr(cameraPos));
-
-    updateNodeTransformations(rootNode, glm::mat4(1.0f));
-
-
     const float ballBottomY = boxNode->position.y - (boxDimensions.y/2) + ballRadius + padDimensions.y;
     const float ballTopY    = boxNode->position.y + (boxDimensions.y/2) - ballRadius;
     const float BallVerticalTravelDistance = ballTopY - ballBottomY;
@@ -418,7 +375,58 @@ void updateFrame(GLFWwindow* window) {
         boxNode->position.z - (boxDimensions.z/2) + (padDimensions.z/2) + (1 - padPositionZ) * (boxDimensions.z - padDimensions.z)
     };
 
-    updateNodeTransformations(rootNode, VP);
+    
+    glUniform3f(glGetUniformLocation(shaderProgram, "ball_position"), ballNode->position.x, ballNode->position.y, ballNode->position.z);
+    glUniform1f(glGetUniformLocation(shaderProgram, "ball_radius"), ballRadius);
+
+    light1Node->position = ballPosition;
+    light1Node->position.z += 20;
+
+    
+    
+    // Send light positions to the shader
+    // glm::vec3 lightPositions[3] = {
+    //     light1Node->position,
+    //     light2Node->position,
+    //     movingLightNode->position
+    // };
+    glm::vec3 lightPositions[3] = {
+        glm::vec3(light1Node->currentTransformationMatrix * glm::vec4(0, 0, 0, 1)),
+        glm::vec3(light2Node->currentTransformationMatrix * glm::vec4(0, 0, 0, 1)),
+        glm::vec3(movingLightNode->currentTransformationMatrix * glm::vec4(0, 0, 0, 1))
+    };
+    
+
+    glm::vec3 lightColors[3] = {
+        glm::vec3(0.29, 0.72, 0.59),  // R light
+        glm::vec3(0.86, 0.28, 0.64),  // G light
+        glm::vec3(1.0, 0.85, 0.0)   // B moving light
+    };
+
+    // Pass light data to the shader
+    // GLuint shaderProgram = shader->getProgramID();
+    // glUseProgram(shaderProgram);
+    
+    if (!shader->isValid()) {
+    std::cerr << "Shader program failed validation!" << std::endl;
+    }
+    
+
+    for (int i = 0; i < 3; i++) {
+        std::string posUniform   = "lights[" + std::to_string(i) + "].position";
+        std::string colorUniform = "lights[" + std::to_string(i) + "].color";
+
+        glUniform3f(glGetUniformLocation(shaderProgram, posUniform.c_str()), lightPositions[i].x, lightPositions[i].y, lightPositions[i].z);
+        glUniform3f(glGetUniformLocation(shaderProgram, colorUniform.c_str()), lightColors[i].x, lightColors[i].y, lightColors[i].z);
+    }
+
+    // Update camera position for specular reflections
+    glm::vec3 cameraPos = glm::vec3(0, 2, -20);
+    glUniform3fv(glGetUniformLocation(5, "viewPos"), 1, glm::value_ptr(cameraPos));
+
+    updateNodeTransformations(rootNode, glm::mat4(1.0f));
+
+
 
 }
 
@@ -452,13 +460,11 @@ void renderNode(SceneNode* node) {
     GLuint shaderProgram = shader->get();
     glm::mat4 modelMatrix = node->currentTransformationMatrix;
 
-    glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
     glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
     glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(modelMatrix)));
     glUniformMatrix3fv(glGetUniformLocation(shaderProgram, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 
-    glUniform3fv(glGetUniformLocation(shaderProgram, "ball_position"), 1, glm::value_ptr(ballNode->position));
-    glUniform1f(glGetUniformLocation(shaderProgram, "ball_radius"), ballRadius);
+    
 
     switch(node->nodeType) {
         case GEOMETRY:

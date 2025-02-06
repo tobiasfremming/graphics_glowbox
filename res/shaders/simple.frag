@@ -40,10 +40,14 @@ void main()
     vec3 norm = normalize(normal);
     vec3 viewDir = normalize(viewPos - fragPos);
     vec3 result = vec3(0.0);
+    // Ambient
+    float ambientStrength = 0.1;
+    vec3 ambient = ambientStrength * vec3(0.1,0.1, 0.1);
 
     for(int i = 0; i < NUM_LIGHTS; i++) {
         vec3 deltaPos = lights[i].position - fragPos;
-        vec3 lightDir = normalize(deltaPos);
+        vec3 lightDir = deltaPos;
+        vec3 normalized_light_direction = normalize(lightDir);
         float d = length(deltaPos);
 
         // Simple ray tracer
@@ -51,52 +55,46 @@ void main()
         // vector from the fragment to the center of the ball
         vec3 frag_to_ball = ball_position - fragPos;
 
-        vec3 projection = reject(frag_to_ball, deltaPos);
-        float projection_length = length(projection);
-        float distance_to_ball = length(frag_to_ball);
-        
-        bool isShadowed = false;
-        
-        if (projection_length < ball_radius) {
-            // float distance_to_ball = length(frag_to_ball);
-            if (d > distance_to_ball) { // Light must be further than the ball
-                if (dot(frag_to_ball, deltaPos) > 0.0) { // Must be in the same direction
-                    isShadowed = true;
-                }
-            }
+        vec3 rejection = reject(frag_to_ball, lightDir);
+        bool less_than_ball = length(rejection) < ball_radius;
+        bool light_closer_to_wall = length(frag_to_ball) < d;
+        bool over_90 = dot(frag_to_ball, lightDir) > 0;
+        bool in_shadow = less_than_ball && light_closer_to_wall && over_90;
+
+        if (in_shadow) {
+            continue;
         }
+
 
         //attenuation
         float attenuation  = 1/(l_a + l_b*d + l_c*d*d);
 
-        // ambient, diffuse, specular, and emission
-        // Ambient
-        float ambientStrength = 0.1;
-        //vec3 ambient = ambientStrength * lights[i].color;
-        vec3 ambient = ambientStrength * vec3(0.1,0.1, 0.1);
+        // diffuse, specular, and emission
+        
+        
         
 
         vec3 diffuse = vec3(0.0);
         vec3 specular = vec3(0.0);
 
-        if (!isShadowed) {
-            // Diffuse
-            float diff = max(dot(norm, lightDir), 0.0);
-            diffuse = attenuation * diff * lights[i].color;
+        
+        // Diffuse
+        float diff = max(dot(norm, normalized_light_direction), 0.0);
+        diffuse = attenuation * diff * lights[i].color;
 
-            // Specular
-            vec3 reflectDir = reflect(-lightDir, norm);
-            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 64);
-            specular = attenuation * spec * lights[i].color;
-        }
+        // Specular
+        vec3 reflectDir = reflect(-normalized_light_direction, norm);
+        float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+        specular = attenuation * spec * lights[i].color;
+        
         
 
-        result += ambient + diffuse + specular;
+        result +=diffuse + specular;
     }
 
     // emission
     vec3 emission = emissionColor * emissionStrength;
-    result += emission;
+    result += emission + ambient;
     // result = normalize(result);
 
     //FragColor = vec4(result * objectColor, 1.0);
