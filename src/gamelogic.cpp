@@ -147,6 +147,9 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     if (!buffer->loadFromFile("../res/Hall of the Mountain King.ogg")) {
         return;
     }
+
+    PNGImage charmap = loadPNGFile("C:/Users/tobia/Documents/Graphics/phong-assignment/TDT4230-Assignment-1/res/textures/charmap.png");
+    unsigned int charmapTextureID = createTexture(charmap);
     
 
     options = gameOptions;
