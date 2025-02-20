@@ -94,6 +94,45 @@ void mouseCallback(GLFWwindow* window, double x, double y) {
     glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
 }
 
+
+
+unsigned int createTexture(const PNGImage& image){
+    
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID); // bind texture
+
+    // glTexParameteri(enum target, enum parameterName, int parameterValue);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    //    - internalFormat:  how many components OpenGL should store
+    //    - width, height:   
+    //    - inputFormat:     raw pixel data layout
+    //    - type:            the data type 
+    glTexImage2D(
+                GL_TEXTURE_2D,   // target
+                 0,              // mipmap level
+                 GL_RGBA,        // internalFormat (store as RGBA)
+                 image.width,
+                 image.height,
+                 0,              // border (must be 0)
+                 GL_RGBA,        // inputFormat (matches internalFormat)
+                 GL_UNSIGNED_BYTE,
+                 image.pixels.data());
+
+    glGenerateMipmap(GL_TEXTURE_2D); // mipmap
+
+    glBindTexture(GL_TEXTURE_2D, 0); // Unbind the texture 
+
+    return textureID;
+
+}
+
+
 //// A few lines to help you if you've never used c++ structs
 struct LightSource {
     glm::vec3 position;
