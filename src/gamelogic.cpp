@@ -9,6 +9,7 @@
 #include <utilities/mesh.h>
 #include <utilities/shapes.h>
 #include <utilities/glutils.h>
+#include <utilities/glfont.h>
 #include <SFML/Audio/Sound.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -20,6 +21,8 @@
 
 #include "utilities/imageLoader.hpp"
 #include "utilities/glfont.h"
+
+#include <glad/glad.h>
 
 enum KeyFrameAction {
     BOTTOM, TOP
@@ -43,6 +46,8 @@ SceneNode* movingLightNode;
 
 
 double ballRadius = 3.0f;
+
+
 
 // These are heap allocated, because they should not be initialised at the start of the program
 sf::SoundBuffer* buffer;
@@ -103,6 +108,83 @@ struct LightSource {
 };
 LightSource lightSources[3];
 
+unsigned int createTexture(const PNGImage& image){
+    
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID); // bind texture
+
+    // glTexParameteri(enum target, enum parameterName, int parameterValue);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    //    - internalFormat:  how many components OpenGL should store
+    //    - width, height:   
+    //    - inputFormat:     raw pixel data layout
+    //    - type:            the data type 
+    glTexImage2D(
+                GL_TEXTURE_2D,   // target
+                 0,              // mipmap level
+                 GL_RGBA,        // internalFormat (store as RGBA)
+                 image.width,
+                 image.height,
+                 0,              // border (must be 0)
+                 GL_RGBA,        // inputFormat (matches internalFormat)
+                 GL_UNSIGNED_BYTE,
+                 image.pixels.data());
+
+    glGenerateMipmap(GL_TEXTURE_2D); // mipmap
+
+    glBindTexture(GL_TEXTURE_2D, 0); // Unbind the texture 
+
+    return textureID;
+
+}
+
+unsigned int generateTextVAO(Mesh& textMesh) {
+    unsigned int VAO, VBO, VBO_Tex, EBO;
+
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    // Vertex Position Buffer
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, textMesh.vertices.size() * sizeof(glm::vec3), textMesh.vertices.data(), GL_STATIC_DRAW);
+    
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Texture Coordinate Buffer
+    glGenBuffers(1, &VBO_Tex);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_Tex);
+    glBufferData(GL_ARRAY_BUFFER, textMesh.textureCoordinates.size() * sizeof(glm::vec2), textMesh.textureCoordinates.data(), GL_STATIC_DRAW);
+    
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void*)0);
+    glEnableVertexAttribArray(1);
+
+    // Index Buffer (EBO)
+    glGenBuffers(1, &EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, textMesh.indices.size() * sizeof(unsigned int), textMesh.indices.data(), GL_STATIC_DRAW);
+
+    // Unbind everything
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    return VAO;
+}
+
+PNGImage charmap = loadPNGFile("C:/Users/tobia/Documents/Graphics/phong-assignment/TDT4230-Assignment-1/res/textures/charmap.png");
+unsigned int charmapTextureID = createTexture(charmap);
+
+Mesh textMesh = generateTextGeometryBuffer("Hello World!", 39.0 / 29.0, 29 * 11);
+unsigned int textVAO = generateTextVAO(textMesh);
+
+
 void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     buffer = new sf::SoundBuffer();
     if (!buffer->loadFromFile("../res/Hall of the Mountain King.ogg")) {
@@ -146,7 +228,7 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     // Set initial positions of the lights
     light1Node->position = glm::vec3(0.0f, 0.0f, 0.0f); // Static
     light2Node->position = glm::vec3(-15.0f, -50.0f, -90.0f);   // Static
-    movingLightNode->position = glm::vec3(0.0f, -20.0f, -10.0f); // Moving
+    movingLightNode->position = glm::vec3(-30.0f, -50.0f, -90.0f); // Moving
 
     rootNode->children.push_back(light1Node);
     rootNode->children.push_back(light2Node);
@@ -186,7 +268,7 @@ void updateFrame(GLFWwindow* window) {
 
     // Move the dynamic light in a circular motion
     float lightMoveRadius = 40.0f;
-    float lightSpeed = 0.5f;
+    float lightSpeed = 0.3f;
     movingLightNode->position.x = sin(glfwGetTime() * lightSpeed) * lightMoveRadius;
     movingLightNode->position.z = cos(glfwGetTime() * lightSpeed) * lightMoveRadius;
     
@@ -475,6 +557,11 @@ void renderNode(SceneNode* node) {
             break;
         case POINT_LIGHT: break;
         case SPOT_LIGHT: break;
+        case NODE_2D:
+            glBindVertexArray(textVAO);
+            glBindTexture(GL_TEXTURE_2D, charmapTextureID);
+            glDrawElements(GL_TRIANGLES, textMesh.indices.size(), GL_UNSIGNED_INT, nullptr);
+            break;
     }
 
     for(SceneNode* child : node->children) {

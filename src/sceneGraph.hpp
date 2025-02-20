@@ -14,7 +14,7 @@
 #include <fstream>
 
 enum SceneNodeType {
-	GEOMETRY, POINT_LIGHT, SPOT_LIGHT
+	GEOMETRY, POINT_LIGHT, SPOT_LIGHT, NODE_2D
 };
 
 struct SceneNode {
@@ -22,6 +22,8 @@ struct SceneNode {
 		position = glm::vec3(0, 0, 0);
 		rotation = glm::vec3(0, 0, 0);
 		scale = glm::vec3(1, 1, 1);
+		
+
 
         referencePoint = glm::vec3(0, 0, 0);
         vertexArrayObjectID = -1;
