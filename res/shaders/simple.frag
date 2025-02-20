@@ -11,6 +11,12 @@ struct Light {
     vec3 color;
 };
 
+float hash(vec3 p) {
+    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+
+
+
 float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453); }
 float dither(vec2 uv) { return (rand(uv)*2.0-1.0) / 256.0; }
 
@@ -36,13 +42,16 @@ void main()
 
     vec3 emissionColor = vec3(0.1, 0.1, 0.1);
     float emissionStrength = 0.0;
-    
-    vec3 norm = normalize(normal);
+
+    vec3 normal_with_noise = normal + vec3(dither(fragPos.yz));
+    vec3 norm = normalize(normal_with_noise);
     vec3 viewDir = normalize(viewPos - fragPos);
     vec3 result = vec3(0.0);
     // Ambient
     float ambientStrength = 0.1;
     vec3 ambient = ambientStrength * vec3(0.1,0.1, 0.1);
+
+    float soft_radius = ball_radius * 1.5;
 
     for(int i = 0; i < NUM_LIGHTS; i++) {
         vec3 deltaPos = lights[i].position - fragPos;
@@ -57,17 +66,27 @@ void main()
 
         vec3 rejection = reject(frag_to_ball, lightDir);
         bool less_than_ball = length(rejection) < ball_radius;
+        bool less_than_soft = length(rejection) < soft_radius;
         bool light_closer_to_wall = length(frag_to_ball) < d;
         bool over_90 = dot(frag_to_ball, lightDir) > 0;
         bool in_shadow = less_than_ball && light_closer_to_wall && over_90;
+        bool in_shadow_soft = less_than_soft && light_closer_to_wall && over_90;
 
         if (in_shadow) {
             continue;
         }
+        
+        float shadow_factor = 1.0;
+        if (in_shadow_soft) {
 
+            float softness = (length(rejection)-ball_radius) / (soft_radius - ball_radius);
+            softness = clamp(softness, 0.0, 1.0);   
+            shadow_factor = softness;
+
+        }
 
         //attenuation
-        float attenuation  = 1/(l_a + l_b*d + l_c*d*d);
+        float attenuation  = 1/(l_a + l_b*d + l_c*d*d) * shadow_factor;
 
         // diffuse, specular, and emission
         
@@ -90,6 +109,7 @@ void main()
         
 
         result +=diffuse + specular;
+        
     }
 
     // emission
@@ -103,5 +123,4 @@ void main()
     FragColor = vec4(result*0.5, 1.0);
     // FragColor = vec4(lights[1].color, 1.0);
  
-
 }
