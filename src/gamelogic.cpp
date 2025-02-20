@@ -41,6 +41,11 @@ SceneNode* light1Node;
 SceneNode* light2Node;
 SceneNode* movingLightNode;
 
+unsigned int textVAO;        // VAO for text rendering
+unsigned int charmapTextureID; // Texture ID for the font atlas
+Mesh textMesh;               // Store the text mesh globally
+
+
 
 double ballRadius = 3.0f;
 
@@ -128,9 +133,72 @@ unsigned int createTexture(const PNGImage& image){
 
     glBindTexture(GL_TEXTURE_2D, 0); // Unbind the texture 
 
+    // Check for errors
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        std::cerr << "OpenGL error: " << err << std::endl;
+    }
+
     return textureID;
 
 }
+
+void generateTextVAO(const Mesh& textMesh) {
+    unsigned int textVBO, textEBO, textUV;
+    
+    glGenVertexArrays(1, &textVAO);
+    glGenBuffers(1, &textVBO);
+    glGenBuffers(1, &textEBO);
+    glGenBuffers(1, &textUV);
+
+    glBindVertexArray(textVAO);
+
+    // Upload Vertex Positions
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+    glBufferData(GL_ARRAY_BUFFER, textMesh.vertices.size() * sizeof(glm::vec3), textMesh.vertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Upload Texture Coordinates
+    glBindBuffer(GL_ARRAY_BUFFER, textUV);
+    glBufferData(GL_ARRAY_BUFFER, textMesh.textureCoordinates.size() * sizeof(glm::vec2), textMesh.textureCoordinates.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void*)0);
+    glEnableVertexAttribArray(1);
+
+    // Upload Indices
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, textEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, textMesh.indices.size() * sizeof(unsigned int), textMesh.indices.data(), GL_STATIC_DRAW);
+
+    glBindVertexArray(0);
+}
+
+
+void renderText(unsigned int shaderProgram) {
+    glUseProgram(shaderProgram);
+    
+    // Bind the font texture
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, charmapTextureID);
+    glUniform1i(glGetUniformLocation(shaderProgram, "textTexture"), 0);
+
+    // Bind VAO and render the text
+    glBindVertexArray(textVAO);
+    glDrawElements(GL_TRIANGLES, textMesh.indices.size(), GL_UNSIGNED_INT, 0);
+    
+    // Unbind VAO
+    glBindVertexArray(0);
+}
+
+SceneNode* create2DGeometryNode(unsigned int textureID) {
+    SceneNode* node = new SceneNode();
+    node->nodeType = NODE2D;
+    node->textureID = textureID;
+    return node;
+}
+
+
+
+
 
 
 //// A few lines to help you if you've never used c++ structs
@@ -147,9 +215,18 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     if (!buffer->loadFromFile("../res/Hall of the Mountain King.ogg")) {
         return;
     }
+    // Loading the texture
+    PNGImage charmap = loadPNGFile("../res/textures/charmap.png");
+    charmapTextureID = createTexture(charmap);
 
-    PNGImage charmap = loadPNGFile("C:/Users/tobia/Documents/Graphics/phong-assignment/TDT4230-Assignment-1/res/textures/charmap.png");
-    unsigned int charmapTextureID = createTexture(charmap);
+    SceneNode* node2D = create2DGeometryNode(charmapTextureID);
+    
+
+    float characterAspectRatio = 39.0f / 29.0f;
+    float textWidth = 5.0f;  // Adjust this based on the desired size
+    textMesh = generateTextGeometryBuffer("HELLO", characterAspectRatio, textWidth);
+    generateTextVAO(textMesh);
+
     
 
     options = gameOptions;
@@ -189,6 +266,8 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     light1Node->position = glm::vec3(0.0f, 0.0f, 0.0f); // Static
     light2Node->position = glm::vec3(-15.0f, -50.0f, -90.0f);   // Static
     movingLightNode->position = glm::vec3(0.0f, -20.0f, -10.0f); // Moving
+
+    rootNode->children.push_back(node2D);
 
     rootNode->children.push_back(light1Node);
     rootNode->children.push_back(light2Node);
@@ -517,6 +596,13 @@ void renderNode(SceneNode* node) {
             break;
         case POINT_LIGHT: break;
         case SPOT_LIGHT: break;
+        case NODE2D:
+            glUseProgram(shaderProgram);
+            glBindTexture(GL_TEXTURE_2D, node->textureID);
+            glBindVertexArray(node->vertexArrayObjectID);
+            glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+            glBindVertexArray(0);
+            break;
     }
 
     for(SceneNode* child : node->children) {
@@ -530,4 +616,6 @@ void renderFrame(GLFWwindow* window) {
     glViewport(0, 0, windowWidth, windowHeight);
 
     renderNode(rootNode);
+
+    
 }
