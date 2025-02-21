@@ -24,8 +24,6 @@ float hash(vec3 p) {
     return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
 }
 
-
-
 float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453); }
 float dither(vec2 uv) { return (rand(uv)*2.0-1.0) / 256.0; }
 
@@ -51,7 +49,6 @@ void main()
     float l_a = 0.001; // Constant attenuation
     float l_b = 0.02; // Linear attenuation
     float l_c = 0.0001; // Quadratic attenuation
-    
 
     vec3 emissionColor = vec3(0.1, 0.1, 0.1);
     float emissionStrength = 0.0;
@@ -137,7 +134,7 @@ void main()
    
     result = result + vec3(dither(textureCoordinates));
     
-    FragColor = vec4(result*0.5, 1.0)* brickTexture;
+    FragColor = vec4(result, 1.0)* brickTexture;
     //FragColor = vec4(normalTexture, 1.0);
     
  
