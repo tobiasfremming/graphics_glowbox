@@ -45,6 +45,8 @@ SceneNode* rootNode2D;
 
 unsigned int textVAO;        // VAO for text rendering
 unsigned int charmapTextureID; // Texture ID for the font atlas
+unsigned int brickTextureID;
+unsigned int brickNormalTextureID;
 Mesh textMesh;               // Store the text mesh globally
 
 glm::mat4 VP;
@@ -125,9 +127,7 @@ unsigned int createTexture(const PNGImage& image){
                  GL_UNSIGNED_BYTE,
                  image.pixels.data());
 
-    // glTexParameteri(enum target, enum parameterName, int parameterValue);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -144,27 +144,6 @@ unsigned int createTexture(const PNGImage& image){
 
     return textureID;
 
-}
-
-
-
-void renderText() {
-    glUseProgram(shader->get());
-
-    // Bind the font texture
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, charmapTextureID);
-    glUniform1i(glGetUniformLocation(shader->get(), "textTexture"), 0);
-
-    // Set up an orthographic projection matrix for 2D text rendering
-    glm::mat4 orthoProjection = glm::ortho(0.0f, (float)windowWidth, 0.0f, (float)windowHeight);
-    glUniformMatrix4fv(glGetUniformLocation(shader->get(), "VP"), 1, GL_FALSE, glm::value_ptr(orthoProjection));
-
-    // Bind VAO and render the text
-    glBindVertexArray(textVAO);
-    glDrawElements(GL_TRIANGLES, textMesh.indices.size(), GL_UNSIGNED_INT, 0);
-    
-    glBindVertexArray(0);
 }
 
 
@@ -214,6 +193,17 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     if (!buffer->loadFromFile("../res/Hall of the Mountain King.ogg")) {
         return;
     }
+
+    PNGImage brickTexture = loadPNGFile("../res/textures/Brick03_col.png");
+    brickTextureID = createTexture(brickTexture);
+
+    PNGImage brickNormalTexture = loadPNGFile("../res/textures/Brick03_nrm.png");
+    brickNormalTextureID = createTexture(brickNormalTexture);
+
+
+
+
+
     // Loading the texture
     PNGImage charmap = loadPNGFile("../res/textures/charmap.png");
     charmapTextureID = createTexture(charmap);
@@ -290,6 +280,9 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
 
     boxNode->vertexArrayObjectID  = boxVAO;
     boxNode->VAOIndexCount        = box.indices.size();
+    boxNode->nodeType             = NORMAL_MAPPED;
+    boxNode->textureID = brickTextureID;
+    boxNode->normalMapID = brickNormalTextureID;
 
     padNode->vertexArrayObjectID  = padVAO;
     padNode->VAOIndexCount        = pad.indices.size();
@@ -573,7 +566,10 @@ void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar)
             break;
         case POINT_LIGHT: 
             break;
-        case SPOT_LIGHT: break;
+        case SPOT_LIGHT: 
+            break;
+        case NORMAL_MAPPED:
+            break;
         
     }
 
@@ -597,6 +593,8 @@ void renderNode(SceneNode* node) {
     switch(node->nodeType) {
         case GEOMETRY:
             if(node->vertexArrayObjectID != -1) {
+                GLint hasTextureLocation = shader->getUniformFromName("hasTexture");
+                glUniform1i(hasTextureLocation, 0);
                 glBindVertexArray(node->vertexArrayObjectID);
                 glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
             }
@@ -612,6 +610,20 @@ void renderNode(SceneNode* node) {
             // glBindVertexArray(0);
             
             break;
+        case NORMAL_MAPPED: {
+
+        
+            GLint hasTextureLocation = shader->getUniformFromName("hasTexture");
+            glUniform1i(hasTextureLocation, 1);
+
+            glBindTextureUnit(0, node->textureID);
+            glBindTextureUnit(1, node->normalMapID);
+
+            glBindVertexArray(node->vertexArrayObjectID);
+            glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+            break;
+
+        }
     }
 
     for(SceneNode* child : node->children) {

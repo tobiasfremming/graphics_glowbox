@@ -1,8 +1,17 @@
 #version 430 core
 
 in layout(location = 0) vec3 normal;
-in layout(location = 1) vec2 textureCoordinates;
-in layout(location = 2) vec3 fragPos;
+in layout(location = 1) vec3 fragPos;
+in layout(location = 2) vec2 textureCoordinates;
+in layout(location = 3) mat3 TBN;
+
+uniform bool hasTexture;
+
+
+layout(binding = 0) uniform sampler2D textureSampler;
+layout(binding = 1) uniform sampler2D normalTextureSampler;
+
+
 
 out vec4 FragColor;
 
@@ -34,6 +43,10 @@ uniform layout(location = 6) vec3 objectColor;
 
 void main()
 {   
+    vec3 normalTexture = TBN * (texture(normalTextureSampler, textureCoordinates).xyz * 2.0 -1.0);
+    vec4 brickTexture  = texture(textureSampler, textureCoordinates);
+
+    vec3 norm;
 
     float l_a = 0.001; // Constant attenuation
     float l_b = 0.02; // Linear attenuation
@@ -43,8 +56,14 @@ void main()
     vec3 emissionColor = vec3(0.1, 0.1, 0.1);
     float emissionStrength = 0.0;
 
-    vec3 normal_with_noise = normal + vec3(dither(fragPos.yz));
-    vec3 norm = normalize(normal_with_noise);
+   
+    if (hasTexture){
+        norm = normalTexture;
+    }
+    else {
+        vec3 normal_with_noise = normal + vec3(dither(fragPos.yz));
+        norm = normalize(normal_with_noise);
+    }
     vec3 viewDir = normalize(viewPos - fragPos);
     vec3 result = vec3(0.0);
     // Ambient
@@ -115,12 +134,11 @@ void main()
     // emission
     vec3 emission = emissionColor * emissionStrength;
     result += emission + ambient;
-    // result = normalize(result);
-
-    //FragColor = vec4(result * objectColor, 1.0);
-    //FragColor = vec4(0.5 * normal + 0.5, 1.0);
+   
     result = result + vec3(dither(textureCoordinates));
-    FragColor = vec4(result*0.5, 1.0);
-    // FragColor = vec4(lights[1].color, 1.0);
+    
+    FragColor = vec4(result*0.5, 1.0)* brickTexture;
+    //FragColor = vec4(normalTexture, 1.0);
+    
  
 }

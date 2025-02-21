@@ -31,6 +31,7 @@ struct SceneNode {
 
 		textureID = 0;
 		normalMapID = 0;
+		roughnessTextureID = -1;
 
 	}
 
@@ -59,6 +60,7 @@ struct SceneNode {
 	// Texture IDs
     unsigned int textureID;   
     unsigned int normalMapID;
+	int roughnessTextureID;
 };
 
 SceneNode* createSceneNode();
