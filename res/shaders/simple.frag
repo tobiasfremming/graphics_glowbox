@@ -10,6 +10,7 @@ uniform bool hasTexture;
 
 layout(binding = 0) uniform sampler2D textureSampler;
 layout(binding = 1) uniform sampler2D normalTextureSampler;
+layout(binding = 2) uniform sampler2D roughnessTextureSampler;
 
 
 
@@ -43,6 +44,9 @@ void main()
 {   
     vec3 normalTexture = TBN * (texture(normalTextureSampler, textureCoordinates).xyz * 2.0 -1.0);
     vec4 brickTexture  = texture(textureSampler, textureCoordinates);
+    vec4 roughnessTexture = texture(roughnessTextureSampler, textureCoordinates);
+    float roughness = roughnessTexture.r;
+    float shininess = 5.0 / pow(roughness, 2.0);
 
     vec3 norm;
 
@@ -55,7 +59,7 @@ void main()
 
    
     if (hasTexture){
-        norm = normalTexture;
+        norm = normalize(normalTexture);
     }
     else {
         vec3 normal_with_noise = normal + vec3(dither(fragPos.yz));
@@ -119,12 +123,12 @@ void main()
 
         // Specular
         vec3 reflectDir = reflect(-normalized_light_direction, norm);
-        float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+        float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
         specular = attenuation * spec * lights[i].color;
         
         
 
-        result +=diffuse + specular;
+        result +=diffuse + (1.0 - roughness) * specular;
         
     }
 

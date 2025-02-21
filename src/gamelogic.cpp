@@ -47,6 +47,7 @@ unsigned int textVAO;        // VAO for text rendering
 unsigned int charmapTextureID; // Texture ID for the font atlas
 unsigned int brickTextureID;
 unsigned int brickNormalTextureID;
+int roughnessTextureID;
 Mesh textMesh;               // Store the text mesh globally
 
 glm::mat4 VP;
@@ -200,6 +201,8 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     PNGImage brickNormalTexture = loadPNGFile("../res/textures/Brick03_nrm.png");
     brickNormalTextureID = createTexture(brickNormalTexture);
 
+    PNGImage roughnessTexture = loadPNGFile("../res/textures/Brick03_rgh.png");
+    roughnessTextureID = createTexture(roughnessTexture);
 
 
 
@@ -283,6 +286,7 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     boxNode->nodeType             = NORMAL_MAPPED;
     boxNode->textureID = brickTextureID;
     boxNode->normalMapID = brickNormalTextureID;
+    boxNode->roughnessTextureID = roughnessTextureID;
 
     padNode->vertexArrayObjectID  = padVAO;
     padNode->VAOIndexCount        = pad.indices.size();
@@ -618,9 +622,11 @@ void renderNode(SceneNode* node) {
 
             glBindTextureUnit(0, node->textureID);
             glBindTextureUnit(1, node->normalMapID);
+            glBindTextureUnit(2, node->roughnessTextureID);
 
             glBindVertexArray(node->vertexArrayObjectID);
             glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+
             break;
 
         }
