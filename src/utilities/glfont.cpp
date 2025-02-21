@@ -13,7 +13,7 @@ Mesh generateTextGeometryBuffer(std::string text, float characterHeightOverWidth
     mesh.vertices.resize(vertexCount);
     mesh.indices.resize(indexCount);
     mesh.textureCoordinates.resize(vertexCount);
-
+    float atlasWidth = 128*29;
 
     for(unsigned int i = 0; i < text.length(); i++)
     {
@@ -21,10 +21,11 @@ Mesh generateTextGeometryBuffer(std::string text, float characterHeightOverWidth
         char character = text[i];
 
         // uv coords
-        float u_start = (character % 16) / 16.0f;  // Column
-        float v_start = (character / 16) / 8.0f;   // Row
-        float u_end = u_start + (1.0f / 16.0f);
-        float v_end = v_start + (1.0f / 8.0f);
+        float u_start = (character*characterWidth)/(atlasWidth);
+        float v_start = 1.0;
+        float u_end = ((character+1)*characterWidth)/atlasWidth;
+        float v_end = 0.0;
+
 
         // mesh.vertices.at(4 * i + 0) = {baseXCoordinate, 0, 0};
         // mesh.vertices.at(4 * i + 1) = {baseXCoordinate + characterWidth, 0, 0};

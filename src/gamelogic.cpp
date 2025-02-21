@@ -40,18 +40,24 @@ SceneNode* padNode;
 SceneNode* light1Node;
 SceneNode* light2Node;
 SceneNode* movingLightNode;
+SceneNode* node2d;
+SceneNode* rootNode2D;
 
 unsigned int textVAO;        // VAO for text rendering
 unsigned int charmapTextureID; // Texture ID for the font atlas
 Mesh textMesh;               // Store the text mesh globally
 
+glm::mat4 VP;
+glm::mat4 P;
 
 
 double ballRadius = 3.0f;
+glm::vec3 cameraPos;
 
 // These are heap allocated, because they should not be initialised at the start of the program
 sf::SoundBuffer* buffer;
 Gloom::Shader* shader;
+Gloom::Shader* shader2D;
 sf::Sound* sound;
 
 const glm::vec3 boxDimensions(180, 90, 90);
@@ -107,17 +113,6 @@ unsigned int createTexture(const PNGImage& image){
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_2D, textureID); // bind texture
 
-    // glTexParameteri(enum target, enum parameterName, int parameterValue);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    //    - internalFormat:  how many components OpenGL should store
-    //    - width, height:   
-    //    - inputFormat:     raw pixel data layout
-    //    - type:            the data type 
     glTexImage2D(
                 GL_TEXTURE_2D,   // target
                  0,              // mipmap level
@@ -129,6 +124,13 @@ unsigned int createTexture(const PNGImage& image){
                  GL_UNSIGNED_BYTE,
                  image.pixels.data());
 
+    // glTexParameteri(enum target, enum parameterName, int parameterValue);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
     glGenerateMipmap(GL_TEXTURE_2D); // mipmap
 
     glBindTexture(GL_TEXTURE_2D, 0); // Unbind the texture 
@@ -143,58 +145,29 @@ unsigned int createTexture(const PNGImage& image){
 
 }
 
-void generateTextVAO(const Mesh& textMesh) {
-    unsigned int textVBO, textEBO, textUV;
-    
-    glGenVertexArrays(1, &textVAO);
-    glGenBuffers(1, &textVBO);
-    glGenBuffers(1, &textEBO);
-    glGenBuffers(1, &textUV);
-
-    glBindVertexArray(textVAO);
-
-    // Upload Vertex Positions
-    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
-    glBufferData(GL_ARRAY_BUFFER, textMesh.vertices.size() * sizeof(glm::vec3), textMesh.vertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // Upload Texture Coordinates
-    glBindBuffer(GL_ARRAY_BUFFER, textUV);
-    glBufferData(GL_ARRAY_BUFFER, textMesh.textureCoordinates.size() * sizeof(glm::vec2), textMesh.textureCoordinates.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(glm::vec2), (void*)0);
-    glEnableVertexAttribArray(1);
-
-    // Upload Indices
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, textEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, textMesh.indices.size() * sizeof(unsigned int), textMesh.indices.data(), GL_STATIC_DRAW);
-
-    glBindVertexArray(0);
-}
 
 
-void renderText(unsigned int shaderProgram) {
-    glUseProgram(shaderProgram);
-    
+void renderText() {
+    glUseProgram(shader->get());
+
     // Bind the font texture
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, charmapTextureID);
-    glUniform1i(glGetUniformLocation(shaderProgram, "textTexture"), 0);
+    glUniform1i(glGetUniformLocation(shader->get(), "textTexture"), 0);
+
+    // Set up an orthographic projection matrix for 2D text rendering
+    glm::mat4 orthoProjection = glm::ortho(0.0f, (float)windowWidth, 0.0f, (float)windowHeight);
+    glUniformMatrix4fv(glGetUniformLocation(shader->get(), "VP"), 1, GL_FALSE, glm::value_ptr(orthoProjection));
 
     // Bind VAO and render the text
     glBindVertexArray(textVAO);
     glDrawElements(GL_TRIANGLES, textMesh.indices.size(), GL_UNSIGNED_INT, 0);
     
-    // Unbind VAO
     glBindVertexArray(0);
 }
 
-SceneNode* create2DGeometryNode(unsigned int textureID) {
-    SceneNode* node = new SceneNode();
-    node->nodeType = NODE2D;
-    node->textureID = textureID;
-    return node;
-}
+
+
 
 
 
@@ -210,6 +183,24 @@ struct LightSource {
 };
 LightSource lightSources[3];
 
+
+void setUniforms(){
+    GLuint shaderProgram = shader->get();
+    glUniform3fv(glGetUniformLocation(5, "viewPos"), 1, glm::value_ptr(cameraPos));
+    glUniform3f(glGetUniformLocation(shaderProgram, "ball_position"), ballNode->position.x, ballNode->position.y, ballNode->position.z);
+    glUniform1f(glGetUniformLocation(shaderProgram, "ball_radius"), ballRadius);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "VP"), 1, GL_FALSE, glm::value_ptr(VP));
+
+    for (int i = 0; i < 3; i++) {
+        std::string posUniform   = "lights[" + std::to_string(i) + "].position";
+        std::string colorUniform = "lights[" + std::to_string(i) + "].color";
+
+        glUniform3f(glGetUniformLocation(shaderProgram, posUniform.c_str()), lightSources[i].position.x, lightSources[i].position.y, lightSources[i].position.z);
+        glUniform3f(glGetUniformLocation(shaderProgram, colorUniform.c_str()), lightSources[i].color.x, lightSources[i].color.y, lightSources[i].color.z);
+    }
+
+}
+
 void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     buffer = new sf::SoundBuffer();
     if (!buffer->loadFromFile("../res/Hall of the Mountain King.ogg")) {
@@ -219,16 +210,20 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     PNGImage charmap = loadPNGFile("../res/textures/charmap.png");
     charmapTextureID = createTexture(charmap);
 
-    SceneNode* node2D = create2DGeometryNode(charmapTextureID);
-    
-
     float characterAspectRatio = 39.0f / 29.0f;
     float textWidth = 5.0f;  // Adjust this based on the desired size
-    textMesh = generateTextGeometryBuffer("HELLO", characterAspectRatio, textWidth);
-    generateTextVAO(textMesh);
+    textMesh = generateTextGeometryBuffer("HELLO", characterAspectRatio, textWidth*29);
+    unsigned int textMeshVAO = generateBuffer(textMesh);
 
+    node2d = new SceneNode();
+    node2d->nodeType = NODE2D;
+    node2d->textureID = charmapTextureID;
+    node2d->vertexArrayObjectID = textMeshVAO;
+    node2d->VAOIndexCount = textMesh.indices.size();
     
-
+    // node2D->position = glm::vec3(-15.0f, -50.0f, -90.0f);
+    
+    
     options = gameOptions;
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
@@ -237,6 +232,12 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     shader = new Gloom::Shader();
     shader->makeBasicShader("../res/shaders/simple.vert", "../res/shaders/simple.frag");
     shader->activate();
+
+    // Load the 2D UI shader
+    shader2D = new Gloom::Shader();
+    shader2D->makeBasicShader("../res/shaders/shader2d.vert", "../res/shaders/shader2d.frag");
+    
+
 
     // Create meshes
     Mesh pad = cube(padDimensions, glm::vec2(30, 40), true);
@@ -258,6 +259,8 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     light2Node = createSceneNode();
     movingLightNode = createSceneNode();
 
+    rootNode2D = createSceneNode();
+
     light1Node->nodeType = POINT_LIGHT;
     light2Node->nodeType = POINT_LIGHT;
     movingLightNode->nodeType = POINT_LIGHT;
@@ -267,7 +270,7 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     light2Node->position = glm::vec3(-15.0f, -50.0f, -90.0f);   // Static
     movingLightNode->position = glm::vec3(0.0f, -20.0f, -10.0f); // Moving
 
-    rootNode->children.push_back(node2D);
+    rootNode2D->children.push_back(node2d);
 
     rootNode->children.push_back(light1Node);
     rootNode->children.push_back(light2Node);
@@ -285,11 +288,6 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
 
     ballNode->vertexArrayObjectID = ballVAO;
     ballNode->VAOIndexCount       = sphere.indices.size();
-
-
-
-
-
 
     getTimeDeltaSeconds();
 
@@ -476,11 +474,11 @@ void updateFrame(GLFWwindow* window) {
                     glm::rotate(lookRotation, glm::vec3(0, 1, 0)) *
                     glm::translate(-cameraPosition);
 
-    glm::mat4 VP = projection * cameraTransform;
-    glm::mat4 P = glm::perspective(glm::radians(80.0f), float(windowWidth) / float(windowHeight), 0.1f, 350.f);
+    VP = projection * cameraTransform;
+    P = glm::perspective(glm::radians(80.0f), float(windowWidth) / float(windowHeight), 0.1f, 350.f);
 
    
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "VP"), 1, GL_FALSE, glm::value_ptr(VP));
+    // glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "VP"), 1, GL_FALSE, glm::value_ptr(VP));
 
 
     // Move and rotate various SceneNodes
@@ -497,8 +495,8 @@ void updateFrame(GLFWwindow* window) {
     };
 
     
-    glUniform3f(glGetUniformLocation(shaderProgram, "ball_position"), ballNode->position.x, ballNode->position.y, ballNode->position.z);
-    glUniform1f(glGetUniformLocation(shaderProgram, "ball_radius"), ballRadius);
+    // glUniform3f(glGetUniformLocation(shaderProgram, "ball_position"), ballNode->position.x, ballNode->position.y, ballNode->position.z);
+    // glUniform1f(glGetUniformLocation(shaderProgram, "ball_radius"), ballRadius);
 
     light1Node->position = ballPosition;
     light1Node->position.z += 20;
@@ -516,13 +514,18 @@ void updateFrame(GLFWwindow* window) {
         glm::vec3(light2Node->currentTransformationMatrix * glm::vec4(0, 0, 0, 1)),
         glm::vec3(movingLightNode->currentTransformationMatrix * glm::vec4(0, 0, 0, 1))
     };
-    
-
     glm::vec3 lightColors[3] = {
         glm::vec3(0.29, 0.72, 0.59),  // R light
         glm::vec3(0.86, 0.28, 0.64),  // G light
         glm::vec3(1.0, 0.85, 0.0)   // B moving light
     };
+
+    for (int i = 0; i < 3; i++){
+        lightSources[i].position = lightPositions[i];
+        lightSources[i].color = lightColors[i];
+    }
+    
+
 
     // Pass light data to the shader
     // GLuint shaderProgram = shader->getProgramID();
@@ -533,21 +536,13 @@ void updateFrame(GLFWwindow* window) {
     }
     
 
-    for (int i = 0; i < 3; i++) {
-        std::string posUniform   = "lights[" + std::to_string(i) + "].position";
-        std::string colorUniform = "lights[" + std::to_string(i) + "].color";
-
-        glUniform3f(glGetUniformLocation(shaderProgram, posUniform.c_str()), lightPositions[i].x, lightPositions[i].y, lightPositions[i].z);
-        glUniform3f(glGetUniformLocation(shaderProgram, colorUniform.c_str()), lightColors[i].x, lightColors[i].y, lightColors[i].z);
-    }
+    
 
     // Update camera position for specular reflections
-    glm::vec3 cameraPos = glm::vec3(0, 2, -20);
-    glUniform3fv(glGetUniformLocation(5, "viewPos"), 1, glm::value_ptr(cameraPos));
+    cameraPos = glm::vec3(0, 2, -20);
+    // glUniform3fv(glGetUniformLocation(5, "viewPos"), 1, glm::value_ptr(cameraPos));
 
     updateNodeTransformations(rootNode, glm::mat4(1.0f));
-
-
 
 }
 
@@ -565,11 +560,12 @@ void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar)
 
     switch(node->nodeType) {
         case GEOMETRY: 
-            glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
+            //glUniformMatrix4fv(3, 1, GL_FALSE, glm::value_ptr(node->currentTransformationMatrix));
             break;
         case POINT_LIGHT: 
             break;
         case SPOT_LIGHT: break;
+        
     }
 
     for(SceneNode* child : node->children) {
@@ -597,11 +593,12 @@ void renderNode(SceneNode* node) {
         case POINT_LIGHT: break;
         case SPOT_LIGHT: break;
         case NODE2D:
-            glUseProgram(shaderProgram);
-            glBindTexture(GL_TEXTURE_2D, node->textureID);
+            // glUseProgram(shaderProgram);
+            // glBindTexture(GL_TEXTURE_2D, node->textureID);
             glBindVertexArray(node->vertexArrayObjectID);
             glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
-            glBindVertexArray(0);
+            // glBindVertexArray(0);
+            
             break;
     }
 
@@ -614,8 +611,11 @@ void renderFrame(GLFWwindow* window) {
     int windowWidth, windowHeight;
     glfwGetWindowSize(window, &windowWidth, &windowHeight);
     glViewport(0, 0, windowWidth, windowHeight);
-
+    shader->activate();
+    setUniforms();
     renderNode(rootNode);
 
+    shader2D->activate();
+    renderNode(rootNode2D);
     
 }
