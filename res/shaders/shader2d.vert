@@ -1,10 +1,17 @@
-#version 330 core
+#version 430 core
 
-layout (location = 0) in vec3 aPos;      // Position
-layout (location = 1) in vec2 aTexCoord; // Texture coordinates
+in layout (location = 0) vec3 aPos;      // Position
+in layout (location = 2) vec2 aTexCoord; // Texture coordinates
+uniform mat4 OrthoProjection;
+uniform mat4 model;
+
+out layout (location = 0) vec2 TexCoord;
+
+
 
 
 void main()
 {
-    gl_Position = vec4(aPos, 1.0); // Convert to screen space
+    TexCoord = aTexCoord;
+    gl_Position = OrthoProjection * model * vec4(aPos, 1.0); // Convert to screen space
 }

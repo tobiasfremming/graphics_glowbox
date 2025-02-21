@@ -49,6 +49,7 @@ Mesh textMesh;               // Store the text mesh globally
 
 glm::mat4 VP;
 glm::mat4 P;
+glm::mat4 OrthoProjection;
 
 
 double ballRadius = 3.0f;
@@ -201,6 +202,13 @@ void setUniforms(){
 
 }
 
+void setUniforms2D(){
+    GLuint shaderProgram = shader2D->get();
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "OrthoProjection"), 1, GL_FALSE, glm::value_ptr(OrthoProjection));
+    
+    
+}
+
 void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     buffer = new sf::SoundBuffer();
     if (!buffer->loadFromFile("../res/Hall of the Mountain King.ogg")) {
@@ -211,8 +219,8 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     charmapTextureID = createTexture(charmap);
 
     float characterAspectRatio = 39.0f / 29.0f;
-    float textWidth = 5.0f;  // Adjust this based on the desired size
-    textMesh = generateTextGeometryBuffer("HELLO", characterAspectRatio, textWidth*29);
+    float textWidth = 12.0f;  // Adjust this based on the desired size
+    textMesh = generateTextGeometryBuffer("HELLO WORLD!", characterAspectRatio, textWidth*29);
     unsigned int textMeshVAO = generateBuffer(textMesh);
 
     node2d = new SceneNode();
@@ -220,7 +228,7 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     node2d->textureID = charmapTextureID;
     node2d->vertexArrayObjectID = textMeshVAO;
     node2d->VAOIndexCount = textMesh.indices.size();
-    
+
     // node2D->position = glm::vec3(-15.0f, -50.0f, -90.0f);
     
     
@@ -237,7 +245,7 @@ void initGame(GLFWwindow* window, CommandLineOptions gameOptions) {
     shader2D = new Gloom::Shader();
     shader2D->makeBasicShader("../res/shaders/shader2d.vert", "../res/shaders/shader2d.frag");
     
-
+    OrthoProjection = glm::ortho(0.0f, float(windowWidth), 0.0f, float(windowHeight), -1.0f, 1.0f);
 
     // Create meshes
     Mesh pad = cube(padDimensions, glm::vec2(30, 40), true);
@@ -543,6 +551,7 @@ void updateFrame(GLFWwindow* window) {
     // glUniform3fv(glGetUniformLocation(5, "viewPos"), 1, glm::value_ptr(cameraPos));
 
     updateNodeTransformations(rootNode, glm::mat4(1.0f));
+    updateNodeTransformations(rootNode2D, glm::mat4(1.0f));
 
 }
 
@@ -581,7 +590,9 @@ void renderNode(SceneNode* node) {
     glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(modelMatrix)));
     glUniformMatrix3fv(glGetUniformLocation(shaderProgram, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 
-    
+    shaderProgram = shader2D->get();
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
+
 
     switch(node->nodeType) {
         case GEOMETRY:
@@ -595,6 +606,7 @@ void renderNode(SceneNode* node) {
         case NODE2D:
             // glUseProgram(shaderProgram);
             // glBindTexture(GL_TEXTURE_2D, node->textureID);
+            glBindTextureUnit(0, node2d->textureID);
             glBindVertexArray(node->vertexArrayObjectID);
             glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
             // glBindVertexArray(0);
@@ -616,6 +628,7 @@ void renderFrame(GLFWwindow* window) {
     renderNode(rootNode);
 
     shader2D->activate();
+    setUniforms2D();
     renderNode(rootNode2D);
     
 }
